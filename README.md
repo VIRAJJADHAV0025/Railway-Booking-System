@@ -6,7 +6,7 @@ A console-based railway reservation project built with Java 17, Hibernate 6 and 
 
 - `src/main/java/com/railway/` contains the Java source code.
 - `pom.xml` contains the Maven dependencies and build settings.
-- The SQL setup script is provided separately as `RailwayReservation_Database.sql`.
+- The SQL setup script is provided separately as `Railway_booking_Database.sql`.
 
 The Java project does not create the database, create tables or insert sample records. The SQL script is responsible for the initial database setup. After setup, the application reads and updates data in MySQL.
 
