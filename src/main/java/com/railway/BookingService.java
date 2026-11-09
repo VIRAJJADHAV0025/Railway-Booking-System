@@ -1,9 +1,9 @@
 package com.railway;
 import jakarta.persistence.LockModeType;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
-import org.hibernate.LockMode;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 
@@ -97,6 +97,36 @@ public class BookingService {
         }
     }
 
+    // Trains that go from fromCode to toCode on ANY day of the week
+    public List<Train> searchRoute(String fromCode, String toCode) {
+        String query = """
+                select distinct train
+                from Train train
+                join TrainStop startStop on startStop.train = train
+                join TrainStop endStop on endStop.train = train
+                where startStop.station.code = :fromCode
+                  and endStop.station.code = :toCode
+                  and startStop.stopOrder < endStop.stopOrder
+                """;
+
+        try (Session session = HibernateUtil.getSessionFactory().openSession()) {
+            return session.createQuery(query, Train.class)
+                    .setParameter("fromCode", fromCode)
+                    .setParameter("toCode", toCode)
+                    .getResultList();
+        }
+    }
+
+    // The weekdays on which a train runs
+    public List<DayOfWeek> runningDays(Long trainId) {
+        try (Session session = HibernateUtil.getSessionFactory().openSession()) {
+            return session.createQuery(
+                    "select day.dayOfWeek from TrainRunningDay day where day.train.id = :trainId",
+                    DayOfWeek.class
+            ).setParameter("trainId", trainId).getResultList();
+        }
+    }
+
     public List<TrainStop> stops(Long trainId) {
         try (Session session = HibernateUtil.getSessionFactory().openSession()) {
             return session.createQuery(
@@ -156,6 +186,8 @@ public class BookingService {
             User passenger,
             Long trainId,
             String classCode,
+            String fromCode,
+            String toCode,
             LocalDate journeyDate,
             List<BookingPassenger> passengers
     ) {
@@ -219,6 +251,33 @@ public class BookingService {
                 throw new IllegalArgumentException("There are not enough seats available for this journey.");
             }
 
+            // The train must stop at both stations, with the source before the destination.
+            Long validRoute = session.createQuery(
+                    "select count(startStop) from TrainStop startStop "
+                            + "join TrainStop endStop on endStop.train = startStop.train "
+                            + "where startStop.train.id = :trainId "
+                            + "and startStop.station.code = :fromCode "
+                            + "and endStop.station.code = :toCode "
+                            + "and startStop.stopOrder < endStop.stopOrder",
+                    Long.class
+            )
+                    .setParameter("trainId", trainId)
+                    .setParameter("fromCode", fromCode)
+                    .setParameter("toCode", toCode)
+                    .getSingleResult();
+
+            if (validRoute == 0) {
+                throw new IllegalArgumentException("This train does not run between the selected stations.");
+            }
+
+            Station fromStation = session.createQuery(
+                    "from Station station where station.code = :code", Station.class
+            ).setParameter("code", fromCode).uniqueResult();
+
+            Station toStation = session.createQuery(
+                    "from Station station where station.code = :code", Station.class
+            ).setParameter("code", toCode).uniqueResult();
+
             User managedPassenger = session.get(User.class, passenger.getId());
             Train train = session.get(Train.class, trainId);
             String pnr = UUID.randomUUID().toString()
@@ -231,6 +290,8 @@ public class BookingService {
                     managedPassenger,
                     train,
                     trainClass.getCoachClass(),
+                    fromStation,
+                    toStation,
                     journeyDate,
                     passengers.size()
             );

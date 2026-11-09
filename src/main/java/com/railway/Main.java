@@ -1,13 +1,19 @@
 package com.railway;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
 public class Main {
     private static final Scanner scanner = new Scanner(System.in);
+
+    // Passenger details kept as plain data so the same people can travel on the return ticket.
+    private record PassengerInfo(String name, int age, String gender) {
+    }
 
     public static void main(String[] args) {
         System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "warn");
@@ -123,13 +129,7 @@ public class Main {
 
         System.out.println("\n===== MY BOOKINGS =====");
         for (Booking booking : bookings) {
-            System.out.println(
-                    booking.getPnr() + " | "
-                            + booking.getTrain().getTrainName() + " | "
-                            + booking.getJourneyDate() + " | "
-                            + booking.getCoachClass().getCode() + " | "
-                            + booking.getStatus()
-            );
+            printTicket(bookingService, booking);
         }
     }
 
@@ -151,9 +151,8 @@ public class Main {
         System.out.println("Bookings are available from "
                 + bookingService.startDate() + " to " + bookingService.endDate() + ".");
 
-        List<Station> stations = bookingService.stations();
         System.out.println("\nAvailable stations:");
-        stations.forEach(System.out::println);
+        bookingService.stations().forEach(System.out::println);
 
         System.out.print("Enter the source station code: ");
         String fromCode = scanner.nextLine().trim().toUpperCase();
@@ -162,50 +161,118 @@ public class Main {
         String toCode = scanner.nextLine().trim().toUpperCase();
 
         System.out.print("Enter the journey date (YYYY-MM-DD): ");
-        LocalDate journeyDate = LocalDate.parse(scanner.nextLine().trim());
+        LocalDate journeyDate;
+        try {
+            journeyDate = LocalDate.parse(scanner.nextLine().trim());
+        } catch (DateTimeParseException e) {
+            System.out.println("Please enter the date as YYYY-MM-DD.");
+            return;
+        }
 
-        List<Train> trains = bookingService.search(fromCode, toCode, journeyDate);
+        List<PassengerInfo> travellers = new ArrayList<>();
+        String pnr = bookJourney(bookingService, passenger, fromCode, toCode, journeyDate, travellers);
+
+        if (pnr == null) {
+            return;
+        }
+
+        System.out.println("\nYour booking has been confirmed.");
+        System.out.println("Your PNR number is: " + pnr);
+
+        System.out.print("\nDo you also want a return ticket (" + toCode + " to " + fromCode + ")? (Y/N): ");
+        if (!scanner.nextLine().trim().equalsIgnoreCase("Y")) {
+            return;
+        }
+
+        System.out.print("Enter the return date (YYYY-MM-DD): ");
+        LocalDate returnDate;
+        try {
+            returnDate = LocalDate.parse(scanner.nextLine().trim());
+        } catch (DateTimeParseException e) {
+            System.out.println("Please enter the date as YYYY-MM-DD.");
+            return;
+        }
+
+        if (returnDate.isBefore(journeyDate)) {
+            System.out.println("The return date cannot be before the journey date.");
+            return;
+        }
+
+        System.out.println("\n===== RETURN JOURNEY: " + toCode + " to " + fromCode + " =====");
+        String returnPnr = bookJourney(bookingService, passenger, toCode, fromCode, returnDate, travellers);
+
+        if (returnPnr != null) {
+            System.out.println("\nYour return booking has been confirmed.");
+            System.out.println("Your return PNR number is: " + returnPnr);
+        }
+    }
+
+    // Searches, lets the user pick a train and class, and books it.
+    // Returns the PNR, or null if nothing was booked.
+    // If "travellers" is empty it asks for passenger details; otherwise it reuses them (return ticket).
+    private static String bookJourney(BookingService bookingService, User passenger,
+                                      String fromCode, String toCode, LocalDate journeyDate,
+                                      List<PassengerInfo> travellers) {
+        List<Train> trains;
+        try {
+            trains = bookingService.search(fromCode, toCode, journeyDate);
+        } catch (IllegalArgumentException e) {
+            System.out.println(e.getMessage());
+            return null;
+        }
 
         if (trains.isEmpty()) {
-            System.out.println("No trains were found for the selected route and date.");
-            return;
+            showOtherDates(bookingService, fromCode, toCode);
+            return null;
         }
 
         System.out.println("\n===== AVAILABLE TRAINS =====");
         for (Train train : trains) {
+            printTrainSummary(bookingService, train, fromCode, toCode, journeyDate);
             System.out.println("Train ID: " + train.getId() + " | " + train);
 
-            List<TrainStop> stops = bookingService.stops(train.getId());
-            for (TrainStop stop : stops) {
-                String arrival = formatTime(stop.getArrivalTime());
-                String departure = formatTime(stop.getDepartureTime());
+            for (TrainStop stop : bookingService.stops(train.getId())) {
                 String day = stop.getDayOffset() > 0
                         ? " (Day " + (stop.getDayOffset() + 1) + ")"
                         : "";
 
                 System.out.println("  " + stop.getStopOrder() + ". "
                         + stop.getStation().getName()
-                        + " | Arrival: " + arrival
-                        + " | Departure: " + departure + day);
+                        + " | Arrival: " + formatTime(stop.getArrivalTime())
+                        + " | Departure: " + formatTime(stop.getDepartureTime()) + day);
             }
         }
 
         System.out.print("Enter the train ID you want to book: ");
-        Long trainId = Long.parseLong(scanner.nextLine().trim());
+        Long trainId;
+        try {
+            trainId = Long.parseLong(scanner.nextLine().trim());
+        } catch (NumberFormatException e) {
+            System.out.println("Please enter a valid train ID.");
+            return null;
+        }
+
+        boolean listed = false;
+        for (Train train : trains) {
+            if (train.getId().equals(trainId)) {
+                listed = true;
+            }
+        }
+        if (!listed) {
+            System.out.println("That train is not in the search results.");
+            return null;
+        }
 
         List<TrainClass> classes = bookingService.classes(trainId);
         if (classes.isEmpty()) {
             System.out.println("No booking classes are available for this train.");
-            return;
+            return null;
         }
 
         System.out.println("\nAvailable classes:");
         for (TrainClass trainClass : classes) {
             int availableSeats = bookingService.seatsLeft(
-                    trainId,
-                    trainClass.getCoachClass().getCode(),
-                    journeyDate
-            );
+                    trainId, trainClass.getCoachClass().getCode(), journeyDate);
 
             System.out.println(trainClass.getCoachClass().getCode() + " - "
                     + trainClass.getCoachClass().getName()
@@ -215,44 +282,141 @@ public class Main {
         System.out.print("Enter the class code: ");
         String classCode = scanner.nextLine().trim().toUpperCase();
 
-        System.out.print("Enter the number of passengers (1 to 6): ");
-        int passengerCount = Integer.parseInt(scanner.nextLine().trim());
+        try {
+            if (travellers.isEmpty()) {
+                System.out.print("Enter the number of passengers (1 to 6): ");
+                int passengerCount = Integer.parseInt(scanner.nextLine().trim());
 
-        if (passengerCount < 1 || passengerCount > 6) {
-            System.out.println("A booking must include between 1 and 6 passengers.");
-            return;
+                if (passengerCount < 1 || passengerCount > 6) {
+                    System.out.println("A booking must include between 1 and 6 passengers.");
+                    return null;
+                }
+
+                for (int i = 1; i <= passengerCount; i++) {
+                    System.out.println("\nPassenger " + i + " details");
+
+                    System.out.print("Full name: ");
+                    String name = scanner.nextLine().trim();
+
+                    System.out.print("Age: ");
+                    int age = Integer.parseInt(scanner.nextLine().trim());
+
+                    System.out.print("Gender (M/F/O): ");
+                    String gender = scanner.nextLine().trim().toUpperCase();
+
+                    new BookingPassenger(name, age, gender); // only checks the details are valid
+                    travellers.add(new PassengerInfo(name, age, gender));
+                }
+            }
+
+            List<BookingPassenger> passengers = new ArrayList<>();
+            for (PassengerInfo info : travellers) {
+                passengers.add(new BookingPassenger(info.name(), info.age(), info.gender()));
+            }
+
+            return bookingService.book(
+                    passenger, trainId, classCode, fromCode, toCode, journeyDate, passengers);
+
+        } catch (NumberFormatException e) {
+            System.out.println("Please enter a number.");
+            travellers.clear();
+            return null;
+        } catch (IllegalArgumentException e) {
+            System.out.println(e.getMessage());
+            travellers.clear();
+            return null;
         }
-
-        List<BookingPassenger> passengers = new ArrayList<>();
-        for (int i = 1; i <= passengerCount; i++) {
-            System.out.println("\nPassenger " + i + " details");
-
-            System.out.print("Full name: ");
-            String name = scanner.nextLine().trim();
-
-            System.out.print("Age: ");
-            int age = Integer.parseInt(scanner.nextLine().trim());
-
-            System.out.print("Gender (M/F/O): ");
-            String gender = scanner.nextLine().trim().toUpperCase();
-
-            passengers.add(new BookingPassenger(name, age, gender));
-        }
-
-        String pnr = bookingService.book(
-                passenger,
-                trainId,
-                classCode,
-                journeyDate,
-                passengers
-        );
-
-        System.out.println("\nYour booking has been confirmed.");
-        System.out.println("Your PNR number is: " + pnr);
     }
 
     private static String formatTime(LocalTime time) {
         return time == null ? "Not available" : time.toString();
+    }
+
+    // Prints one ticket with the departure and arrival date and time for the booked stations.
+    private static void printTicket(BookingService bookingService, Booking booking) {
+        String fromCode = booking.getFromStation().getCode();
+        String toCode = booking.getToStation().getCode();
+
+        TrainStop fromStop = null;
+        TrainStop toStop = null;
+        for (TrainStop stop : bookingService.stops(booking.getTrain().getId())) {
+            if (stop.getStation().getCode().equals(fromCode)) {
+                fromStop = stop;
+            }
+            if (stop.getStation().getCode().equals(toCode)) {
+                toStop = stop;
+            }
+        }
+
+        System.out.println("----------------------------------------");
+        System.out.println("PNR: " + booking.getPnr() + " | Status: " + booking.getStatus());
+        System.out.println("Train: " + booking.getTrain());
+        System.out.println("Class: " + booking.getCoachClass().getCode()
+                + " | Seats: " + booking.getSeatCount());
+
+        if (fromStop != null && toStop != null) {
+            LocalDate departDate = booking.getJourneyDate().plusDays(fromStop.getDayOffset());
+            LocalDate arriveDate = booking.getJourneyDate().plusDays(toStop.getDayOffset());
+
+            System.out.println("From: " + booking.getFromStation().getName()
+                    + " | Departure: " + departDate + " " + formatTime(fromStop.getDepartureTime()));
+            System.out.println("To:   " + booking.getToStation().getName()
+                    + " | Arrival:   " + arriveDate + " " + formatTime(toStop.getArrivalTime()));
+        }
+    }
+
+    private static void printTrainSummary(BookingService bookingService, Train train,
+                                          String fromCode, String toCode, LocalDate journeyDate) {
+        TrainStop fromStop = null;
+        TrainStop toStop = null;
+
+        for (TrainStop stop : bookingService.stops(train.getId())) {
+            if (stop.getStation().getCode().equals(fromCode)) {
+                fromStop = stop;
+            }
+            if (stop.getStation().getCode().equals(toCode)) {
+                toStop = stop;
+            }
+        }
+
+        if (fromStop == null || toStop == null) {
+            return;
+        }
+
+        LocalDate departDate = journeyDate.plusDays(fromStop.getDayOffset());
+        LocalDate arriveDate = journeyDate.plusDays(toStop.getDayOffset());
+
+        System.out.println(train + " | "
+                + fromStop.getStation().getName() + " (" + departDate + " "
+                + formatTime(fromStop.getDepartureTime()) + ")  ->  "
+                + toStop.getStation().getName() + " (" + arriveDate + " "
+                + formatTime(toStop.getArrivalTime()) + ")");
+    }
+
+    private static void showOtherDates(BookingService bookingService, String fromCode, String toCode) {
+        List<Train> routeTrains = bookingService.searchRoute(fromCode, toCode);
+
+        if (routeTrains.isEmpty()) {
+            System.out.println("No train runs directly from " + fromCode + " to " + toCode + ".");
+            return;
+        }
+
+        System.out.println("No trains on that date, but this route is available on:");
+
+        for (Train train : routeTrains) {
+            List<DayOfWeek> days = bookingService.runningDays(train.getId());
+            System.out.println(train + " runs on: " + days);
+
+            int shown = 0;
+            LocalDate date = bookingService.startDate();
+            while (!date.isAfter(bookingService.endDate()) && shown < 5) {
+                if (days.contains(date.getDayOfWeek())) {
+                    System.out.println("   " + date + " (" + date.getDayOfWeek() + ")");
+                    shown++;
+                }
+                date = date.plusDays(1);
+            }
+        }
     }
 
     private static void adminLogin(BookingService bookingService) {
@@ -309,6 +473,8 @@ public class Main {
                     "PNR: " + booking.getPnr()
                             + " | Passenger: " + booking.getUser().getUsername()
                             + " | Train: " + booking.getTrain().getTrainName()
+                            + " | Route: " + booking.getFromStation().getCode()
+                            + " -> " + booking.getToStation().getCode()
                             + " | Journey date: " + booking.getJourneyDate()
                             + " | Status: " + booking.getStatus()
             );

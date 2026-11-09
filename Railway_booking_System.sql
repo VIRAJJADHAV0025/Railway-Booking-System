@@ -6,6 +6,8 @@
 -- Run this script only once on a fresh database. Running it again will create
 -- duplicate-key errors because the sample records are already present.
 
+-- DROP DATABASE IF EXISTS railway;
+
 CREATE DATABASE IF NOT EXISTS railway;
 
 USE railway;
@@ -23,6 +25,7 @@ CREATE TABLE users (
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 );
 
+SELECT * FROM users;
 
 -- Adds the administrator account used to open the admin menu.
 -- This sample password is for demonstration purposes only.
@@ -252,3 +255,46 @@ JOIN trains t ON t.train_number = sample.train_number;
 -- Administrator login details created by this script:
 -- Username: admin
 -- Password: admin123
+
+-- ------------------------------------------------------------
+-- EXTRA SAMPLE TRAIN: Dadar -> Surat -> Ahmedabad (demo data)
+-- ------------------------------------------------------------
+
+INSERT INTO trains (train_number, train_name)
+VALUES ('12901', 'Gujarat Mail (demo data)');
+
+INSERT INTO train_stops
+    (train_id, station_id, stop_order, arrival_time, departure_time, day_offset)
+SELECT
+    t.id, s.id, route.stop_order, route.arrival_time, route.departure_time, route.day_offset
+FROM (
+    SELECT '12901' AS train_number, 'DR' AS station_code, 1 AS stop_order,
+           NULL AS arrival_time, '22:10:00' AS departure_time, 0 AS day_offset
+    UNION ALL SELECT '12901', 'ST',  2, '03:20:00', '03:25:00', 1
+    UNION ALL SELECT '12901', 'ADI', 3, '06:15:00', NULL,        1
+) AS route
+JOIN trains t ON t.train_number = route.train_number
+JOIN stations s ON s.code = route.station_code;
+
+INSERT INTO train_running_days (train_id, day_of_week)
+SELECT t.id, days.day_of_week
+FROM trains t
+CROSS JOIN (
+    SELECT 'MONDAY' AS day_of_week
+    UNION ALL SELECT 'TUESDAY'
+    UNION ALL SELECT 'WEDNESDAY'
+    UNION ALL SELECT 'THURSDAY'
+    UNION ALL SELECT 'FRIDAY'
+    UNION ALL SELECT 'SATURDAY'
+    UNION ALL SELECT 'SUNDAY'
+) AS days
+WHERE t.train_number = '12901';
+
+INSERT INTO train_classes (train_id, class_code, total_seats)
+SELECT t.id, sample.class_code, sample.total_seats
+FROM (
+    SELECT '12901' AS train_number, 'SL' AS class_code, 200 AS total_seats
+    UNION ALL SELECT '12901', '3A', 72
+    UNION ALL SELECT '12901', '2A', 48
+) AS sample
+JOIN trains t ON t.train_number = sample.train_number;

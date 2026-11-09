@@ -48,6 +48,14 @@ public class Booking {
     @JoinColumn(name = "class_code")
     private CoachClass coachClass;
 
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "from_station_id")
+    private Station fromStation;
+
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "to_station_id")
+    private Station toStation;
+
     @Column(name = "journey_date", nullable = false)
     private LocalDate journeyDate;
 
@@ -78,6 +86,8 @@ public class Booking {
             User user,
             Train train,
             CoachClass coachClass,
+            Station fromStation,
+            Station toStation,
             LocalDate journeyDate,
             int seatCount
     ) {
@@ -85,6 +95,8 @@ public class Booking {
         this.user = user;
         this.train = train;
         this.coachClass = coachClass;
+        this.fromStation = fromStation;
+        this.toStation = toStation;
         this.journeyDate = journeyDate;
         this.seatCount = seatCount;
         this.createdAt = LocalDateTime.now();
@@ -113,6 +125,14 @@ public class Booking {
 
     public CoachClass getCoachClass() {
         return coachClass;
+    }
+
+    public Station getFromStation() {
+        return fromStation;
+    }
+
+    public Station getToStation() {
+        return toStation;
     }
 
     public LocalDate getJourneyDate() {
