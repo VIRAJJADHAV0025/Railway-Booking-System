@@ -1,6 +1,6 @@
 # Railway Reservation System
 
-A console-based railway reservation project built with Java 17, Hibernate 6 and MySQL.
+A console-based railway reservation project built with Java 26, Hibernate 6 and MySQL.
 
 ## Project structure
 
