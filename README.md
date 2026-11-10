@@ -1,6 +1,6 @@
 # Railway Reservation System
 
-A console-based railway reservation project built with Java 17, Hibernate 6 and MySQL.
+A console-based railway reservation project built with Java 26, Hibernate 6 and MySQL.
 
 ## Project structure
 
@@ -13,9 +13,9 @@ The Java project does not create the database, create tables or insert sample re
 ## 1. Create the database
 
 1. Open MySQL Workbench and connect to your MySQL server.
-2. Open `RailwayReservation_Database.sql`.
+2. Open `Railway_Booking_Database.sql`.
 3. Execute the entire script.
-4. Refresh the Schemas panel and confirm that `railway_db` and its tables are present.
+4. Refresh the Schemas panel and confirm that `railway` and its tables are present.
 
 Run the setup script only once on a fresh database. It creates the tables and inserts the sample records, including the administrator account.
 
@@ -23,7 +23,7 @@ Run the setup script only once on a fresh database. It creates the tables and in
 
 Open `src/main/java/com/railway/HibernateUtil.java` and check the default connection settings:
 
-- Database: `railway_db`
+- Database: `railway`
 - Host: `localhost`
 - Port: `3306`
 - Username: `root`
