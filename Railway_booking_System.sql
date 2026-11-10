@@ -1,8 +1,8 @@
--- Railway Reservation System
+-- Railway Booking System
 -- Database setup script
 --
 -- Run this script in MySQL Workbench to create the database, tables and sample records.
--- If railway_db already exists, the script will use that database.
+-- If railway database already exists, the script will use that database.
 -- Run this script only once on a fresh database. Running it again will create
 -- duplicate-key errors because the sample records are already present.
 
@@ -24,8 +24,6 @@ CREATE TABLE users (
     phone VARCHAR(15),
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 );
-
-SELECT * FROM users;
 
 -- Adds the administrator account used to open the admin menu.
 -- This sample password is for demonstration purposes only.
@@ -118,6 +116,8 @@ CREATE TABLE bookings (
     user_id BIGINT NOT NULL,
     train_id BIGINT NOT NULL,
     class_code VARCHAR(5) NOT NULL,
+    from_station_id BIGINT NOT NULL,
+    to_station_id BIGINT NOT NULL,
     journey_date DATE NOT NULL,
     seat_count INT NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'CONFIRMED',
@@ -128,7 +128,9 @@ CREATE TABLE bookings (
 
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (train_id) REFERENCES trains(id),
-    FOREIGN KEY (class_code) REFERENCES coach_classes(code)
+    FOREIGN KEY (class_code) REFERENCES coach_classes(code),
+    FOREIGN KEY (from_station_id) REFERENCES stations(id),
+    FOREIGN KEY (to_station_id) REFERENCES stations(id)
 );
 
 
@@ -296,5 +298,49 @@ FROM (
     SELECT '12901' AS train_number, 'SL' AS class_code, 200 AS total_seats
     UNION ALL SELECT '12901', '3A', 72
     UNION ALL SELECT '12901', '2A', 48
+) AS sample
+JOIN trains t ON t.train_number = sample.train_number;
+
+
+-- Journey return Sample data
+
+INSERT INTO trains (train_number, train_name)
+VALUES ('12124', 'Deccan Queen Return (demo data)');
+
+INSERT INTO train_stops
+    (train_id, station_id, stop_order, arrival_time, departure_time, day_offset)
+SELECT
+    t.id, s.id, route.stop_order, route.arrival_time, route.departure_time, route.day_offset
+FROM (
+    SELECT '12124' AS train_number, 'PUNE' AS station_code, 1 AS stop_order,
+           NULL AS arrival_time, '07:15:00' AS departure_time, 0 AS day_offset
+    UNION ALL SELECT '12124', 'LNL',  2, '08:18:00', '08:20:00', 0
+    UNION ALL SELECT '12124', 'KYN',  3, '09:35:00', '09:37:00', 0
+    UNION ALL SELECT '12124', 'TNA',  4, '09:55:00', '09:57:00', 0
+    UNION ALL SELECT '12124', 'DR',   5, '10:08:00', '10:10:00', 0
+    UNION ALL SELECT '12124', 'CSMT', 6, '10:25:00', NULL,        0
+) AS route
+JOIN trains t ON t.train_number = route.train_number
+JOIN stations s ON s.code = route.station_code;
+
+INSERT INTO train_running_days (train_id, day_of_week)
+SELECT t.id, days.day_of_week
+FROM trains t
+CROSS JOIN (
+    SELECT 'MONDAY' AS day_of_week
+    UNION ALL SELECT 'TUESDAY'
+    UNION ALL SELECT 'WEDNESDAY'
+    UNION ALL SELECT 'THURSDAY'
+    UNION ALL SELECT 'FRIDAY'
+    UNION ALL SELECT 'SATURDAY'
+    UNION ALL SELECT 'SUNDAY'
+) AS days
+WHERE t.train_number = '12124';
+
+INSERT INTO train_classes (train_id, class_code, total_seats)
+SELECT t.id, sample.class_code, sample.total_seats
+FROM (
+    SELECT '12124' AS train_number, 'CC' AS class_code, 80 AS total_seats
+    UNION ALL SELECT '12124', '2S', 120
 ) AS sample
 JOIN trains t ON t.train_number = sample.train_number;

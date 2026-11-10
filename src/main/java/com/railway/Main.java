@@ -67,13 +67,18 @@ public class Main {
         System.out.print("Choose a password: ");
         String password = scanner.nextLine();
 
-        boolean registered = bookingService.register(username, password, name);
+        try {
+              boolean registered = bookingService.register(username, password, name);
 
-        if (registered) {
-            System.out.println("Your account has been created successfully.");
-        } else {
-            System.out.println("That username is already in use. Please choose another one.");
-        }
+              if (registered) {
+                     System.out.println("Your account has been created successfully.");
+              } else {
+                     System.out.println("That username is already in use. Please choose another one.");
+              }
+            } 
+        catch (IllegalArgumentException exception) {
+                 System.out.println(exception.getMessage());
+           }
     }
 
     private static void passengerLogin(BookingService bookingService) {
