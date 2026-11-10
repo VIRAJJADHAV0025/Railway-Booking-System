@@ -13,8 +13,8 @@ import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
  */
 public final class HibernateUtil {
 
-    private static final SessionFactory SESSION_FACTORY =
-            buildSessionFactory();
+    private static final SessionFactory SESSION_FACTORY = 
+        buildSessionFactory();
 
     private HibernateUtil() {
         // Utility class. Do not create instances.
